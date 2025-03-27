@@ -15,8 +15,7 @@ class Addon {
     };
     prefs?: {
       window: Window;
-      columns: Array<ColumnOptions>;
-      rows: Array<{ [dataKey: string]: string }>;
+      journalList: Array<string>;
     };
     dialog?: DialogHelper;
   };

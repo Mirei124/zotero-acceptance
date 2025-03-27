@@ -1,5 +1,6 @@
 import { config } from "../../package.json";
 import { getString } from "../utils/locale";
+import { getPref, setPref } from "../utils/prefs";
 
 export async function registerPrefsScripts(_window: Window) {
   // This function is called when the prefs window is opened
@@ -7,32 +8,7 @@ export async function registerPrefsScripts(_window: Window) {
   if (!addon.data.prefs) {
     addon.data.prefs = {
       window: _window,
-      columns: [
-        {
-          dataKey: "title",
-          label: getString("prefs-table-title"),
-          fixedWidth: true,
-          width: 100,
-        },
-        {
-          dataKey: "detail",
-          label: getString("prefs-table-detail"),
-        },
-      ],
-      rows: [
-        {
-          title: "Orange",
-          detail: "It's juicy",
-        },
-        {
-          title: "Banana",
-          detail: "It's sweet",
-        },
-        {
-          title: "Apple",
-          detail: "I mean the fruit APPLE",
-        },
-      ],
+      journalList: getPref("acceptanceStatusList").split("|"),
     };
   } else {
     addon.data.prefs.window = _window;
@@ -41,91 +17,101 @@ export async function registerPrefsScripts(_window: Window) {
   bindPrefEvents();
 }
 
+function appendInputRow(
+  document: Document,
+  parent: Node,
+  value: string,
+  placeholder: string,
+) {
+  const box = document.createElement("hbox");
+  box.classList.add(`${config.addonRef}-journal-sublist-box`);
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = value;
+  input.placeholder = placeholder;
+  input.className = "input-row-input";
+  const button = document.createElement("button");
+  button.innerText = "⛔";
+  button.className = "input-row-button";
+  button.addEventListener("click", (ev) => {
+    addon.data.prefs!.journalList = addon.data.prefs!.journalList.filter(
+      (v) => {
+        return v != input.value;
+      },
+    );
+    updatePrefsUI();
+    return false;
+  });
+  box.appendChild(input);
+  box.appendChild(button);
+  parent.appendChild(box);
+}
+
+function writePrefs(values: string[]) {
+  setPref("acceptanceStatusList", values.join("|"));
+  addon.data.prefs!.journalList = values;
+}
+
 async function updatePrefsUI() {
   // You can initialize some UI elements on prefs window
   // with addon.data.prefs.window.document
   // Or bind some events to the elements
-  const renderLock = ztoolkit.getGlobal("Zotero").Promise.defer();
   if (addon.data.prefs?.window == undefined) return;
-  const tableHelper = new ztoolkit.VirtualizedTable(addon.data.prefs?.window)
-    .setContainerId(`${config.addonRef}-table-container`)
-    .setProp({
-      id: `${config.addonRef}-prefs-table`,
-      // Do not use setLocale, as it modifies the Zotero.Intl.strings
-      // Set locales directly to columns
-      columns: addon.data.prefs?.columns,
-      showHeader: true,
-      multiSelect: true,
-      staticColumns: true,
-      disableFontSizeScaling: true,
-    })
-    .setProp("getRowCount", () => addon.data.prefs?.rows.length || 0)
-    .setProp(
-      "getRowData",
-      (index) =>
-        addon.data.prefs?.rows[index] || {
-          title: "no data",
-          detail: "no data",
-        },
-    )
-    // Show a progress window when selection changes
-    .setProp("onSelectionChange", (selection) => {
-      new ztoolkit.ProgressWindow(config.addonName)
-        .createLine({
-          text: `Selected line: ${addon.data.prefs?.rows
-            .filter((v, i) => selection.isSelected(i))
-            .map((row) => row.title)
-            .join(",")}`,
-          progress: 100,
-        })
-        .show();
-    })
-    // When pressing delete, delete selected line and refresh table.
-    // Returning false to prevent default event.
-    .setProp("onKeyDown", (event: KeyboardEvent) => {
-      if (event.key == "Delete" || (Zotero.isMac && event.key == "Backspace")) {
-        addon.data.prefs!.rows =
-          addon.data.prefs?.rows.filter(
-            (v, i) => !tableHelper.treeInstance.selection.isSelected(i),
-          ) || [];
-        tableHelper.render();
-        return false;
-      }
-      return true;
-    })
-    // For find-as-you-type
-    .setProp(
-      "getRowString",
-      (index) => addon.data.prefs?.rows[index].title || "",
-    )
-    // Render the table.
-    .render(-1, () => {
-      renderLock.resolve();
-    });
+  const renderLock = ztoolkit.getGlobal("Zotero").Promise.defer();
+  const document = addon.data.prefs!.window.document!;
+  const boxElem = document.querySelector(
+    `#${config.addonRef}-journal-list-box`,
+  );
+  boxElem!.innerHTML = "";
+  addon.data.prefs!.journalList.map((v) => {
+    appendInputRow(document, boxElem!, v, "");
+  });
+  renderLock.resolve();
   await renderLock.promise;
   ztoolkit.log("Preference table rendered!");
 }
 
 function bindPrefEvents() {
   addon.data
-    .prefs!.window.document.querySelector(
-      `#zotero-prefpane-${config.addonRef}-enable`,
-    )
-    ?.addEventListener("command", (e) => {
-      ztoolkit.log(e);
-      addon.data.prefs!.window.alert(
-        `Successfully changed to ${(e.target as XUL.Checkbox).checked}!`,
+    .prefs!.window.document.querySelector(`#${config.addonRef}-button-add`)
+    ?.addEventListener("command", (ev) => {
+      const boxElem = addon.data.prefs!.window.document.querySelector(
+        `#${config.addonRef}-journal-list-box`,
       );
+      appendInputRow(addon.data.prefs!.window.document, boxElem!, "", "CVPR");
+      return false;
     });
 
   addon.data
-    .prefs!.window.document.querySelector(
-      `#zotero-prefpane-${config.addonRef}-input`,
-    )
-    ?.addEventListener("change", (e) => {
-      ztoolkit.log(e);
-      addon.data.prefs!.window.alert(
-        `Successfully changed to ${(e.target as HTMLInputElement).value}!`,
+    .prefs!.window.document.querySelector(`#${config.addonRef}-button-save`)
+    ?.addEventListener("command", (ev) => {
+      const newStatusList: string[] = [];
+      addon.data
+        .prefs!.window.document.querySelector(
+          `#${config.addonRef}-journal-list-box`,
+        )!
+        .childNodes.forEach((e) => {
+          const ce = e.firstChild as HTMLInputElement;
+          newStatusList.push(ce.value ? ce.value : "null");
+        });
+      writePrefs(Array.from(new Set(newStatusList)).sort());
+      updatePrefsUI();
+      return addon.hooks.onUpdateRightClickMenu().then((v) => {
+        return false;
+      });
+    });
+
+  addon.data
+    .prefs!.window.document.querySelector(`#${config.addonRef}-button-reset`)
+    ?.addEventListener("command", (ev) => {
+      setPref(
+        "acceptanceStatusList",
+        "CVPR 🌟|ICCV 🌟|ECCV 🌟|ACL 🌟|NeurIPS 🌟|ICLR 🌟|ICML 🌟|EMNLP 🌟|AAAI ⭐|ACM MM ⭐|COLING ⭐",
       );
+      addon.data.prefs!.journalList = getPref("acceptanceStatusList").split(
+        "|",
+      );
+      updatePrefsUI();
+      return false;
     });
 }
