@@ -12,3 +12,4 @@ acceptance-menu-label = Acceptance
 none-label = None
 acceptance-label = Acceptance
 prefs-title = Acceptance
+unknown-label = Unknown

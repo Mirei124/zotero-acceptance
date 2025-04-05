@@ -12,3 +12,4 @@ acceptance-menu-label = 发表情况
 none-label = 无
 acceptance-label = 发表情况
 prefs-title = 发表情况
+unknown-label = 未知

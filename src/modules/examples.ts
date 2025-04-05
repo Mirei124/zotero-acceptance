@@ -20,10 +20,13 @@ export class Acceptance {
 
   static getItemAcceptanceStatus(it: Zotero.Item) {
     const status = new ExtraFieldTool().getExtraField(it, ACCEPTANCE_KEY_NAME);
-    if (status && status !== ACCEPTANCE_STATUS_NONE) {
-      return status;
+    if (status != undefined) {
+      if (status !== ACCEPTANCE_STATUS_NONE) {
+        return status;
+      }
+      return getString("none-label");
     }
-    return getString("none-label");
+    return getString("unknown-label");
   }
 
   static setSelectedAcceptanceStatus(status: string) {
